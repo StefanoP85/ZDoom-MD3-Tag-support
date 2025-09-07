@@ -1,0 +1,375 @@
+//==============================================================================
+//
+// MD3 Tags handling.
+//
+//==============================================================================
+
+// -----------------------------------------------------------------------------
+// Data management.
+// -----------------------------------------------------------------------------
+
+// Class TMD3TagFrame represent a MD3 Tag in a frame in a model.
+class TMD3TagFrame : Object
+{
+	// Index in MD3Models array.
+	int MD3Model;
+	// Index in MD3Tags array.
+	int MD3Tag;
+	// Actor's sprite number << 5 + sprite subnumber.
+	// Used to reference the model's current animation frame.
+	int MD3Frame;
+	Vector3 Position;
+	Quat Rotation;
+	static TMD3TagFrame Create(int MD3Model, int MD3Tag,
+		float Position0, float Position1, float Position2,
+		float Rotation00, float Rotation01, float Rotation02,
+		float Rotation10, float Rotation11, float Rotation12,
+		float Rotation20, float Rotation21, float Rotation22
+	)
+	{
+		TMD3TagFrame MD3TagFrame = New('TMD3TagFrame');
+		MD3TagFrame.MD3Model = MD3Model;
+		MD3TagFrame.MD3Tag = MD3Tag;
+		MD3TagFrame.Position = (Position0, Position1, Position2);
+		double Diagonal = Rotation00 + Rotation11 + Rotation22 + 1;
+		double Scale = 0.0;
+		if (Diagonal > 0.000001)
+		{
+			Scale = Sqrt(Diagonal) * 2;
+			MD3TagFrame.Rotation.X = (Rotation21 - Rotation12) / Scale;
+			MD3TagFrame.Rotation.Y = (Rotation02 - Rotation20) / Scale;
+			MD3TagFrame.Rotation.Z = (Rotation10 - Rotation01) / Scale;
+			MD3TagFrame.Rotation.W = 0.25 * Scale;
+		}
+		else
+		{
+			if ((Rotation00 > Rotation11) && (Rotation00 > Rotation22))
+			{
+				Scale = Sqrt(1.0 + Rotation00 - Rotation11 - Rotation22) * 2.0;
+				MD3TagFrame.Rotation.X = 0.25 * Scale;
+				MD3TagFrame.Rotation.Y = (Rotation10 + Rotation01) / Scale;
+				MD3TagFrame.Rotation.Z = (Rotation02 + Rotation20) / Scale;
+				MD3TagFrame.Rotation.W = (Rotation21 - Rotation12) / Scale;
+			}
+			else
+			{
+				if (Rotation11 > Rotation22)
+				{
+					Scale = Sqrt(1.0 + Rotation11 - Rotation00 - Rotation22) * 2.0;
+					MD3TagFrame.Rotation.X = (Rotation10 + Rotation01) / Scale;
+					MD3TagFrame.Rotation.Y = 0.25 * Scale;
+					MD3TagFrame.Rotation.Z = (Rotation21 + Rotation12) / Scale;
+					MD3TagFrame.Rotation.W = (Rotation02 - Rotation20) / Scale;
+				}
+				else
+				{
+					Scale = Sqrt(1.0 + Rotation22 - Rotation00 - Rotation11) * 2.0;
+					MD3TagFrame.Rotation.X = (Rotation02 + Rotation20) / Scale;
+					MD3TagFrame.Rotation.Y = (Rotation21 + Rotation12) / Scale;
+					MD3TagFrame.Rotation.Z = 0.25 * Scale;
+					MD3TagFrame.Rotation.W = (Rotation10 - Rotation01) / Scale;
+				}
+			}
+		}
+		return MD3TagFrame;
+	}
+}
+
+// Association of sprite name (4 chars) and frame (1 char) to the previous record.
+// It's used temporarily, during game's startup.
+class TMD3TagFrameTemp : Object
+{
+	String SpriteName;
+	String SpriteLetter;
+}
+class TMD3TagFrameTempArray : Object
+{
+	Array<TMD3TagFrameTemp> FrameSprites;
+	static TMD3TagFrameTempArray Create()
+	{
+		TMD3TagFrameTempArray MD3TagFrameTempArray = New('TMD3TagFrameTempArray');
+		return MD3TagFrameTempArray;
+	}
+}
+
+// Class TMD3Manager stores the MD3 Tags data and allows usage.
+class TMD3Manager : Object
+{
+	Array<Class<Actor>> MD3Models;
+	Array<String> MD3Tags;
+	Array<TMD3TagFrame> MD3TagFrames;
+	static TMD3Manager Create()
+	{
+		TMD3Manager MD3Manager = New('TMD3Manager');
+		return MD3Manager;
+	}
+	// Get a MD3 Tag from the data.
+	Vector3, Quat GetMD3Tag(Class<Actor> ClassName, String TagName, int MD3Frame)
+	{
+		int ClassIndex = MD3Models.Find(ClassName);
+		int TagIndex = MD3Tags.Find(TagName);
+		for (int I = 0; I < MD3TagFrames.Size(); I++)
+			if ((MD3TagFrames[I].MD3Model == ClassIndex) && (MD3TagFrames[I].MD3Tag == TagIndex) && (MD3TagFrames[I].MD3Frame == MD3Frame))
+				return MD3TagFrames[I].Position, MD3TagFrames[I].Rotation;
+		// MD3 tag not found: return a "default" one.
+		//
+		// Position = || 0  0  0 ||
+		//
+		//             || 1  0  0 ||    x  y  z  w
+		//  Rotation = || 0  1  0 || = (0, 0, 0, 1)
+		//             || 0  0  1 ||
+		//
+		return (0, 0, 0), Quat(0, 0, 0, 1);
+	}
+	// Get a MD3 tag from a specified Actor.
+	Vector3, Quat GetActorTag(Actor MD3Actor, String TagName)
+	{
+		int MD3Frame = (MD3Actor.CurState.Sprite << 5) + MD3Actor.CurState.Frame;
+		let [Position, Rotation] = GetMD3Tag(MD3Actor.GetClass(), TagName, MD3Frame);
+		return Position, Rotation;
+	}
+	// Conversion from a Quaternion to angles.
+	static void ToAngles(Quat Quaternion, out double Angle, out double Pitch, out double Roll)
+	{
+		Angle = ATan2(2 * (Quaternion.X * Quaternion.Y + Quaternion.Z * Quaternion.W), (1 - 2 * (Quaternion.Y * Quaternion.Y + Quaternion.Z * Quaternion.Z)));
+		double Test = Quaternion.X * Quaternion.Z - Quaternion.Y * Quaternion.W;
+		if (Test > 0.49999) { // Singularity at north pole.
+			Pitch = -90;
+			Roll  = Actor.Normalize180(Angle + (2 * ATan2(Quaternion.X, Quaternion.W)));
+		} else if (Test < -0.49999) { // Singularity at south pole.
+			Pitch = 90;
+			Roll  = Actor.Normalize180(Angle + (2 * ATan2(Quaternion.X, Quaternion.W)));
+		} else {
+			Pitch = -ASin(2 * Test);
+			Roll  = ATan2(2 * (Quaternion.W * Quaternion.X + Quaternion.Y * Quaternion.Z), (1 - 2 * (Quaternion.X * Quaternion.X + Quaternion.Y * Quaternion.Y)));
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Modeldef parser.
+// -----------------------------------------------------------------------------
+
+class TModeldefParser : Object
+{
+	TMD3Manager MD3Manager;
+	TMD3TagFrameTempArray MD3TagFrameTempArray;
+	ScriptScanner Sc;
+	static TModeldefParser Create(TMD3Manager MD3Manager, TMD3TagFrameTempArray MD3TagFrameTempArray)
+	{
+		TModeldefParser ModeldefParser = New('TModeldefParser');
+		ModeldefParser.Sc = New('ScriptScanner');
+		ModeldefParser.MD3Manager = MD3Manager;
+		ModeldefParser.MD3TagFrameTempArray = MD3TagFrameTempArray;
+		return ModeldefParser;
+	}
+	void ParseModelDefLump(TMD3Manager MD3Manager, int Lump, String ClassName)
+	{
+		// Safety check.
+		if (MD3Manager.MD3Models.Find(ClassName) < MD3Manager.MD3Models.Size())
+			return;
+		int ClassIndex = MD3Manager.MD3Models.Push(ClassName);
+		TLittleEndianDataInputStream DIS = null;
+		int FrameIndex;
+		int Index;
+		String ModelClassName;
+		String ModelName;
+		String ModelPath = "";
+		int NumberOfFrames;
+		int NumberOfTags;
+		int OffsetOfFrames;
+		int OffsetOfTags;
+		String AnimationFrame;
+		String SpriteLetter;
+		String SpriteName;
+		int TagIndex;
+		String TagName;
+		String TestAnimationFrame;
+		String Token;
+		Sc.OpenLumpNum(Lump);
+		while (Sc.GetString())
+		{
+			if (Sc.GetStringContents() ~== "MODEL")
+			{
+				Sc.MustGetString();
+				ModelClassName = Sc.GetStringContents();
+				if (ModelClassName ~== ClassName)
+				{
+					Sc.MustGetStringName("{");
+					while (Sc.GetString())
+					{
+						Token = Sc.GetStringContents();
+						if (Token ~== "PATH")
+						{
+							Sc.MustGetString();
+							ModelPath = Sc.GetStringContents();
+						}
+						if (Token ~== "MODEL")
+						{
+							Sc.MustGetNumber();
+							Index = Sc.Number;
+							if (Index == 0)
+							{
+								Sc.MustGetString();
+								ModelName = Sc.GetStringContents();
+								if (ModelPath != "")
+									ModelName = String.Format("%s/%s", ModelPath, ModelName);
+								DIS = TLittleEndianDataInputStream.Create(Wads.ReadLump(Wads.CheckNumForFullName(ModelName)));
+								DIS.Seek(76, SeekBegin);
+								NumberOfFrames = DIS.ReadInt32();
+								NumberOfTags = DIS.ReadInt32();
+								DIS.Seek(8, SeekCurrent);
+								OffsetOfFrames = DIS.ReadInt32();
+								OffsetOfTags = DIS.ReadInt32();
+							}
+						}
+						if (Token ~== "FRAME")
+						{
+							Sc.MustGetString();
+							SpriteName = Sc.GetStringContents();
+							Sc.MustGetString();
+							SpriteLetter = Sc.GetStringContents();
+							Sc.MustGetNumber();
+							Index = Sc.Number;
+							Sc.MustGetString();
+							AnimationFrame = Sc.GetStringContents();
+							if (Index == 0)
+							{
+								for (FrameIndex = 0; FrameIndex < NumberOfFrames; FrameIndex++)
+								{
+									DIS.Seek(OffsetOfFrames + FrameIndex * 56 + 40, SeekBegin);
+									TestAnimationFrame = DIS.ReadString(16);
+									if (AnimationFrame == TestAnimationFrame)
+									{
+										for (int I = 0; I < NumberOfTags; I++)
+										{
+											DIS.Seek(OffsetOfTags + (FrameIndex * NumberOfTags + I) * 112, SeekBegin);
+											TagName = DIS.ReadString(64);
+											TagIndex = MD3Manager.MD3Tags.Find(TagName);
+											if (TagIndex == MD3Manager.MD3Tags.Size())
+												TagIndex = MD3Manager.MD3Tags.Push(TagName);
+											TMD3TagFrame MD3TagFrame = TMD3TagFrame.Create(ClassIndex, TagIndex,
+												DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+												DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+												DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+												DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32()
+											);
+											MD3Manager.MD3TagFrames.Push(MD3TagFrame);
+											TMD3TagFrameTemp MD3TagFrameTemp = New('TMD3TagFrameTemp');
+											MD3TagFrameTemp.SpriteName = SpriteName;
+											MD3TagFrameTemp.SpriteLetter = SpriteLetter;
+											MD3TagFrameTempArray.FrameSprites.Push(MD3TagFrameTemp);
+										}
+										break;
+									}
+								}
+							}
+						}
+						if (Token ~== "FRAMEINDEX")
+						{
+							Sc.MustGetString();
+							SpriteName = Sc.GetStringContents();
+							Sc.MustGetString();
+							SpriteLetter = Sc.GetStringContents();
+							Sc.MustGetNumber();
+							Index = Sc.Number;
+							Sc.MustGetNumber();
+							FrameIndex = Sc.Number;
+							if (Index == 0)
+							{
+								for (int I = 0; I < NumberOfTags; I++)
+								{
+									DIS.Seek(OffsetOfTags + (FrameIndex * NumberOfTags + I) * 112, SeekBegin);
+									TagName = DIS.ReadString(64);
+									TagIndex = MD3Manager.MD3Tags.Find(TagName);
+									if (TagIndex == MD3Manager.MD3Tags.Size())
+										TagIndex = MD3Manager.MD3Tags.Push(TagName);
+									TMD3TagFrame MD3TagFrame = TMD3TagFrame.Create(ClassIndex, TagIndex,
+										DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+										DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+										DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32(),
+										DIS.ReadFloat32(), DIS.ReadFloat32(), DIS.ReadFloat32()
+									);
+									MD3Manager.MD3TagFrames.Push(MD3TagFrame);
+									TMD3TagFrameTemp MD3TagFrameTemp = New('TMD3TagFrameTemp');
+									MD3TagFrameTemp.SpriteName = SpriteName;
+									MD3TagFrameTemp.SpriteLetter = SpriteLetter;
+									MD3TagFrameTempArray.FrameSprites.Push(MD3TagFrameTemp);
+								}
+							}
+						}
+						if (Sc.GetStringContents() == "}")
+							break;
+					}
+				}
+			}
+		}
+		Sc.Close();
+		if (DIS)
+			DIS.Destroy();
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Event handler.
+// -----------------------------------------------------------------------------
+
+class MD3TagsHandler : StaticEventHandler
+{
+	TMD3Manager MD3Manager;
+	TModeldefParser ModeldefParser;
+	TMD3TagFrameTempArray MD3TagFrameTempArray;
+	void Initialize()
+	{
+		MD3Manager = TMD3Manager.Create();
+		MD3TagFrameTempArray = TMD3TagFrameTempArray.Create();
+		ModeldefParser = TModeldefParser.Create(MD3Manager, MD3TagFrameTempArray);
+	}
+	void Finalize()
+	{
+		ModeldefParser.Sc.Destroy();
+		ModeldefParser.Sc = null;
+		ModeldefParser.Destroy();
+		ModeldefParser = null;
+	}
+	int ReadModel(String ModeldefLump, String ClassName)
+	{
+		int Lump = Wads.CheckNumForFullName(ModeldefLump);
+		if (Lump >= 0)
+		{
+			ModeldefParser.ParseModelDefLump(MD3Manager, Lump, ClassName);
+			return MD3Manager.MD3Models.Find(ClassName);
+		}
+		else
+			return -1; // Modeldef lump not found.
+	}
+	override void OnRegister()
+	{
+		super.OnRegister();
+		Initialize();
+		ReadModel("MODELDEFS/Elf.txt", 'Elf');
+		ReadModel("MODELDEFS/Railgun.txt", 'Railgun');
+		ReadModel("MODELDEFS/Weapon.txt", 'CustomWeapon');
+		Finalize();
+	}
+	override void WorldLoaded(WorldEvent E)
+	{
+		super.WorldLoaded(E);
+		if (MD3TagFrameTempArray)
+		{
+			for (int I = 0; I < MD3Manager.MD3TagFrames.Size(); I++)
+			{
+				String SpriteName = MD3TagFrameTempArray.FrameSprites[I].SpriteName;
+				String SpriteLetter = MD3TagFrameTempArray.FrameSprites[I].SpriteLetter;
+				SpriteName = SpriteName.MakeUpper();
+				SpriteLetter = SpriteLetter.MakeUpper();
+				int SpriteNumber = Actor.GetSpriteIndex(SpriteName);
+				int SpriteSubnumber = SpriteLetter.ByteAt(0) - 65; // 'A'.
+				MD3Manager.MD3TagFrames[I].MD3Frame = (SpriteNumber << 5) + SpriteSubnumber;
+			}
+			MD3TagFrameTempArray.FrameSprites.Clear();
+			MD3TagFrameTempArray.Destroy();
+			MD3TagFrameTempArray = null;
+		}
+	}
+}
