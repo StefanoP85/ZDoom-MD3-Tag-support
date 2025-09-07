@@ -1,0 +1,15 @@
+Model Railgun
+{
+	Path             "MODELS"
+	Model       0    "Railgun.md3"
+	SurfaceSkin 0  0 "RailCase.png"
+	SurfaceSkin 0  1 "RailGrip.png"
+	SurfaceSkin 0  2 "RailRear.png"
+	SurfaceSkin 0  3 "RailLCD.png"
+	Scale 1.0 1.0 1.2
+	DONTCULLBACKFACES
+	USEACTORPITCH
+	USEACTORROLL
+
+	FrameIndex NADA A 0 0
+}
