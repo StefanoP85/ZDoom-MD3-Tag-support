@@ -1,0 +1,4 @@
+GameInfo
+{
+	AddEventHandlers = "MD3TagsHandler"
+}
