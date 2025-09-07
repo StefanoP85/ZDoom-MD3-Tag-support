@@ -1,0 +1,3 @@
+#include "MODELDEFS/Elf.txt"
+#include "MODELDEFS/Railgun.txt"
+#include "MODELDEFS/Weapon.txt"
