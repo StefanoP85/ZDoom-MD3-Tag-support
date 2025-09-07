@@ -1,0 +1,11 @@
+Model CustomWeapon
+{
+	Path    "MODELS"
+	Model 0 "Weapon.md3"
+	Skin  0 "Weapon.png"
+	Scale 1.0 1.0 1.2
+	USEACTORROLL // model would follow actors roll
+	USEACTORPITCH // model would follow actors pitch
+
+	FrameIndex NADA A 0 0
+}
