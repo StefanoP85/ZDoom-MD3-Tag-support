@@ -1,0 +1,14 @@
+class CustomWeapon: Actor
+{
+	default
+	{
+		+NoInteraction;
+	}
+	states
+	{
+		Spawn:
+			TNT1 A 0;
+			NADA A -1;
+			wait;
+	}
+}
