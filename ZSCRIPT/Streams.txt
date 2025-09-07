@@ -1,0 +1,167 @@
+//==============================================================================
+//
+// Streams.
+//
+//==============================================================================
+
+// -----------------------------------------------------------------------------
+// Generic stream.
+// -----------------------------------------------------------------------------
+
+enum TSeekOrigin
+{
+	SeekBegin,
+	SeekCurrent,
+	SeekEnd,
+}
+
+class TStream : Object
+{
+	int Position;
+	virtual int Length()
+	{
+		return 0;
+	}
+	virtual bool EOF()
+	{
+		return Position >= Length();
+	}
+	virtual int Seek(int Offset, TSeekOrigin SeekOrigin)
+	{
+		switch (SeekOrigin)
+		{
+			case SeekBegin:
+				Position = Offset;
+				break;
+			case SeekCurrent:
+				Position += Offset;
+				break;
+			case SeekEnd:
+				Position = Length() + Offset;
+				break;
+		}
+		if (Position > Length())
+			Position = Length();
+		if (Position < 0)
+			Position = 0;
+		return Position;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Little endian binary stream.
+// -----------------------------------------------------------------------------
+
+class TLittleEndianDataInputStream : TStream
+{
+	String Data;
+	override int Length()
+	{
+		return Data.Length();
+	}
+	int ReadByte()
+	{
+		if (EOF())
+			return -1;
+		int Result = Data.CharCodeAt(Position) & 255;
+		Seek(1, SeekCurrent);
+		return Result;
+	}
+	bool ReadBoolean()
+	{
+		int Result = ReadByte();
+		return Result != 0;
+	}
+	int ReadInt16()
+	{
+        int Low = ReadByte();
+        int High = ReadByte();
+        return ((High << 8) | Low);
+    }
+	int ReadInt32()
+	{
+        int Byte0 = ReadByte();
+        int Byte1 = ReadByte();
+        int Byte2 = ReadByte();
+        int Byte3 = ReadByte();
+        return ((Byte3 << 24) | (Byte2 << 16) | (Byte1 << 8) | (Byte0));
+    }
+	int ReadInt64()
+	{
+        int Byte0 = ReadByte();
+        int Byte1 = ReadByte();
+        int Byte2 = ReadByte();
+        int Byte3 = ReadByte();
+        int Byte4 = ReadByte();
+        int Byte5 = ReadByte();
+        int Byte6 = ReadByte();
+        int Byte7 = ReadByte();
+        return ((Byte7 << 56) | (Byte6 << 48) | (Byte5 << 40) | (Byte4 << 32) | (Byte3 << 24) | (Byte2 << 16) | (Byte1 << 8) | (Byte0));
+    }
+	double ReadFloat32()
+	{
+		int Value = ReadInt32();
+		if (Value == 0)
+			return 0;
+		if (Value == 0x80000000)
+			return -0;
+		if (Value == 0x7F800000)
+			return double.Max; // Inf
+		if (Value == 0xFF800000)
+			return -double.Max; // -Inf
+		if ((Value >= 0x7F800001) && (Value <= 0x7FFFFFFF))
+			return double.NaN;
+		if ((Value >= 0xFF800001) && (Value <= 0xFFFFFFFF))
+			return double.NaN;
+		double SignBit = ((Value >> 31) == 0) ? 1 : -1;
+		int Exp = (Value >> 23) & 0xFF;
+		int Mantix = (Exp == 0) ? (Value & 0x7FFFFF) << 1 : (Value & 0x7FFFFF) | 0x800000;
+		double Result = SignBit * Mantix * 2 ** (Exp - 150);
+		return Result;
+	}
+	double ReadFloat64()
+	{
+		int Value0 = ReadInt32();
+		int Value1 = ReadInt32();
+		if ((Value0 == 0) && (Value1 == 0))
+			return 0;
+		if ((Value1 == 0x80000000) && (Value0 == 0))
+			return -0;
+		if ((Value1 == 0x7FF00000) && (Value0 == 0))
+			return double.Max; // Inf
+		if ((Value1 == 0xFFF00000) && (Value0 == 0))
+			return -double.Max; // -Inf
+		if ((((Value1 == 0x7FF00000) && (Value0 >= 0x00000001)) || (Value0 >= 0x7FF00001)) && (Value1 <= 0x7FFFFFFF))
+			return double.NaN;
+		if ((((Value1 == 0xFFF00000) && (Value0 >= 0x00000001)) || (Value0 >= 0xFFF00001)) && (Value1 <= 0xFFFFFFFF))
+			return double.NaN;
+		double SignBit = ((Value1 >> 31) == 0) ? 1 : -1;
+		int Exp = (Value1 >> 20) & 0x7FF;
+		int Mantix = (Exp == 0) ? (Value1 & 0xFFFFF) << 1 : (Value1 & 0xFFFFF) | 0x100000;
+		double Result = SignBit * Mantix * 2 ** (Exp - 1075) + Value0 * 2 ** (Exp - 1095);
+		return Result;
+	}
+	String ReadString(int Length = -1)
+	{
+		String Result = "";
+		if (Length > 0)
+			for(int i = 0; i < length; i++)
+				Result.AppendFormat("%c", ReadByte());
+		else
+			while(true)
+			{
+				int Ch = ReadByte();
+				if (Ch == 0)
+					break;
+				Result.AppendFormat("%c", Ch);
+			}
+		return Result;
+	}
+	static TLittleEndianDataInputStream Create(String Data)
+	{
+		TLittleEndianDataInputStream LittleEndianDataInputStream = New("TLittleEndianDataInputStream");
+		LittleEndianDataInputStream.Data = Data;
+		LittleEndianDataInputStream.Position = 0;
+		return LittleEndianDataInputStream;
+	}
+}
