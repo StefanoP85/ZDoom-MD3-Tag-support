@@ -1,0 +1,133 @@
+class Elf: Actor
+{
+	TMD3Manager MD3Manager;
+	Actor CarriedWeapon;
+	override void PostBeginPlay()
+	{
+		super.PostBeginPlay();
+		// Gets a reference to the MD3Manager.
+		MD3TagsHandler Handler = MD3TagsHandler(StaticEventHandler.Find("MD3TagsHandler"));
+		MD3Manager = Handler.MD3Manager;
+	}
+	void TagLinkActor(Actor LinkedActor, String TagName)
+	{
+		Vector3 ItemPosition;
+		Quat ItemRotation;
+		Vector3 ActorPosition;
+		Quat ActorRotation;
+		Quat BaseRotation = Quat.FromAngles(Angle, Pitch, Roll);
+		[ItemPosition, ItemRotation] = MD3Manager.GetActorTag(LinkedActor, TagName);
+		[ActorPosition, ActorRotation] = MD3Manager.GetActorTag(self, TagName);
+		Vector3 Position = Pos + BaseRotation * (ItemPosition + ActorPosition);
+		Quat Rotation = BaseRotation * (ItemRotation * ActorRotation);
+		double NewAngle, NewPitch, NewRoll;
+		MD3Manager.ToAngles(Rotation, NewAngle, NewPitch, NewRoll);
+		CarriedWeapon.Angle = NewAngle;
+		CarriedWeapon.Pitch = NewPitch;
+		CarriedWeapon.Roll  = NewRoll;
+		CarriedWeapon.SetXYZ(Position);
+	}
+	override void Tick()
+	{
+		super.Tick();
+		if (CarriedWeapon)
+			TagLinkActor(CarriedWeapon, "tag_weapon");
+	}
+	void Attach()
+	{
+		int RandomChoice = Random(0, 1);
+		if (RandomChoice == 0)
+			CarriedWeapon = Spawn('Railgun');
+		else
+			CarriedWeapon = Spawn('CustomWeapon');
+	}
+	void Detach()
+	{
+		CarriedWeapon.Destroy();
+		CarriedWeapon = null;
+	}
+	default
+	{
+		Monster;
+	}
+	states
+	{
+		Spawn:
+			TNT1 A 0;
+			goto See;
+		See:
+			TNT1 A 0 Attach();
+			goto Idle;
+		Death:
+			TNT1 A 0 Detach();
+			TNT1 A 0 A_Jump(256, "Death.1", "Death.2", "Death.3");
+			goto See;
+		Death.1:
+			ND10 ABCDEFGHIJKLMNOPQRSTUVWXYZ 3;
+			ND11 ABC 3;
+			ND11 D -1;
+			stop;
+		Death.2:
+			ND20 ABCDEFGHIJKLMNOPQRSTUVWXYZ 3;
+			ND21 ABC 3;
+			ND21 D -1;
+			stop;
+		Death.3:
+			ND30 ABCDEFGHIJKLMNOPQRSTUVWXYZ 3;
+			ND31 ABC 3;
+			ND31 D -1;
+			stop;
+		Gesture:
+			NGE0 ABCDEFGHIJKLMNOPQRSTUVWXYZ 3;
+			NGE1 ABCDEFGHIJKLMN 3;
+			loop;
+		Attack1:
+			NAT1 ABCDEF 3;
+			loop;
+		Attack2:
+			NAT2 ABCDEF 3;
+			loop;
+		Drop:
+			NDRO ABCDE 3;
+			loop;
+		Raise:
+			NRAI ABCD 3;
+			goto See;
+		Stand1:
+			NSTA A 3;
+			loop;
+		Stand2:
+			NSTA B 3;
+			loop;
+		WalkCr:
+			NWAC ABCDEFGH 3;
+			loop;
+		Walk:
+			NWAL ABCDEFGHIJKLMNOPQ 3;
+			loop;
+		Run:
+			NRUN ABCDEFGHI 3;
+			loop;
+		WalkBack:
+			NWAB ABCDEFGHIJ 3;
+			loop;
+		Swim:
+			NSWI ABCDEFGHIJ 3;
+			loop;
+		Jump:
+			NJUM ABCDEFGHIJKLMNOPQRSTU 3;
+			loop;
+		JumpBack:
+			NJUB ABCDEFGHIJKLMNO 3;
+			loop;
+		Idle:
+			NIDL ABCDEFGHIJKLMN 3;
+			loop;
+		IdleCrouch:
+			NIDC ABCDEFGHIJ 3;
+			loop;
+		Turn:
+			NTUR ABCDEFGHI 3;
+			loop;
+	}
+}
