@@ -86,7 +86,7 @@ class TLittleEndianDataInputStream : TStream
         int Byte3 = ReadByte();
         return ((Byte3 << 24) | (Byte2 << 16) | (Byte1 << 8) | (Byte0));
     }
-	int ReadInt64()
+	/* not possible, sorry int ReadInt64()
 	{
         int Byte0 = ReadByte();
         int Byte1 = ReadByte();
@@ -97,7 +97,7 @@ class TLittleEndianDataInputStream : TStream
         int Byte6 = ReadByte();
         int Byte7 = ReadByte();
         return ((Byte7 << 56) | (Byte6 << 48) | (Byte5 << 40) | (Byte4 << 32) | (Byte3 << 24) | (Byte2 << 16) | (Byte1 << 8) | (Byte0));
-    }
+    }*/
 	double ReadFloat32()
 	{
 		int Value = ReadInt32();
@@ -138,17 +138,17 @@ class TLittleEndianDataInputStream : TStream
 		double SignBit = ((Value1 >> 31) == 0) ? 1 : -1;
 		int Exp = (Value1 >> 20) & 0x7FF;
 		int Mantix = (Exp == 0) ? (Value1 & 0xFFFFF) << 1 : (Value1 & 0xFFFFF) | 0x100000;
-		double Result = SignBit * Mantix * 2 ** (Exp - 1075) + Value0 * 2 ** (Exp - 1095);
+		double Result = SignBit * Mantix * 2 ** (Exp - 1043) + Value0 * 2 ** (Exp - 1075);
 		return Result;
 	}
 	String ReadString(int Length = -1)
 	{
 		String Result = "";
 		if (Length > 0)
-			for(int i = 0; i < length; i++)
+			for (int I = 0; I < length; I++)
 				Result.AppendFormat("%c", ReadByte());
 		else
-			while(true)
+			while (True)
 			{
 				int Ch = ReadByte();
 				if (Ch == 0)
